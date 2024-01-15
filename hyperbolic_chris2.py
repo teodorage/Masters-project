@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import constants
 import matplotlib.patches
 import kepler
+import bodies
+import datetime
 
 def r_v_vectors(r0,v0, degrees_r,degrees_v):
     """Calculate a grid of starting position and velocity vectors and orbital parameters
@@ -109,12 +111,13 @@ def array_basicKeplerEquationSolver( mean_anomaly: np.ndarray, eccentricity: flo
 
 r0 = 1000*constants.R_JUPITER # distance from jupiter to the spacecraft [km]
 v0 = 3.4 # speed [km/s]
-t_start = constants.EPOCH 
+# t_start = constants.EPOCH 
+t_start = 58849.0*86400.0 #[seconds]
 
 # By trial and error I found that if the velocity vector was pointed within tan^-1(16/1000) degrees
 # of Jupiter then it would collide with Jupiter, hence 180- this angle as the upper limit.
-degrees_r = np.arange(0,360,45)
-degrees_v = np.arange(175,180-np.degrees(np.arctan2(16*constants.R_JUPITER,r0)),0.25)
+degrees_r = np.arange(0,360,30)
+degrees_v = np.arange(175,180-np.degrees(np.arctan2(16*constants.R_JUPITER,r0)),0.75)
 
 position, velocity, angular, eccentricity, semimajor_axis, mean_motion =r_v_vectors(r0,v0,degrees_r,degrees_v)
 
@@ -170,27 +173,52 @@ t_periapsis = -M_start/mean_motion
 # 6. Work out the position and then plot it.
 eccentricity_scalar = np.linalg.norm(eccentricity, axis=2)
 r_periapsis = np.zeros_like(semimajor_axis)
-for i in range(len(degrees_r)):
-    for j in range(len(degrees_v)):
-        print("Computing trajectory: deg_r {}/{}, deg_v {}/{}".format(i+1, len(degrees_r), j+1, len(degrees_v)))
+callisto = bodies.get_callisto()
+# distance = np.zeros()
+def hyperbolicOrbit(degrees_r,degrees_v, t_periapsis,mean_motion,M_start, eccentricity_scalar, semimajor_axis, eccentricity,t_start):
+    D = np.zeros((len(degrees_r),len(degrees_v)))
+    for i in range(len(degrees_r)):
+        for j in range(len(degrees_v)):
+            print("Computing trajectory: deg_r {}/{}, deg_v {}/{}".format(i+1, len(degrees_r), j+1, len(degrees_v)))
 
         # t_start is a datetime.datetime object, but mean_anomaly just needs
         # times from t_start, so we can just make an array of times
         # from t_start
-        times_from_start = np.arange(0, 1.0*t_periapsis[i,j], 3600.0)
-        mean_anomaly = mean_motion[i,j]*(times_from_start) + M_start[i,j]
-        hyper_anomaly = array_basicKeplerEquationSolver(mean_anomaly, eccentricity_scalar[i,j])     # Using the faster array version - we can just pass all the mean anomalies and it will return all the hyperbolic anomalies
-        true_anomaly = 2.0*np.arctan(np.sqrt((eccentricity_scalar[i,j] +1)/(eccentricity_scalar[i,j] - 1))*np.tan(hyper_anomaly*0.5)) # true anomaly
-        radial = semimajor_axis[i,j]*(1-eccentricity_scalar[i,j] *np.cosh(hyper_anomaly)) # determines the radius which is then used for the x-y coordinates
 
-        arg_periapsis = np.arccos(eccentricity[i,j,0]/(eccentricity_scalar[i,j]))
-        if eccentricity[i,j,1]<0.0:
-            arg_periapsis = -arg_periapsis
+            times_from_start = np.arange(0, 1.5*t_periapsis[i,j], 3600.0)
+            # times = [datetime.datetime.utcfromtimestamp(t_start) + datetime.timedelta(seconds=t) for t in times_from_start]
+            times = np.array([t_start + t for t in times_from_start])
 
-        x1 = radial*np.cos(true_anomaly+arg_periapsis) # x coordinate
-        y1 = radial*np.sin(true_anomaly+arg_periapsis) # y coordinate
-        r_periapsis[i,j] = np.min(np.sqrt(x1*x1 + y1*y1))
-        plt.plot(x1,y1)
+            mean_anomaly = mean_motion[i,j]*(times_from_start) + M_start[i,j]
+            hyper_anomaly = array_basicKeplerEquationSolver(mean_anomaly, eccentricity_scalar[i,j])     # Using the faster array version - we can just pass all the mean anomalies and it will return all the hyperbolic anomalies
+            true_anomaly = 2.0*np.arctan(np.sqrt((eccentricity_scalar[i,j] +1)/(eccentricity_scalar[i,j] - 1))*np.tan(hyper_anomaly*0.5)) # true anomaly
+            radial = semimajor_axis[i,j]*(1-eccentricity_scalar[i,j] *np.cosh(hyper_anomaly)) # determines the radius which is then used for the x-y coordinates
+
+            arg_periapsis = np.arccos(eccentricity[i,j,0]/(eccentricity_scalar[i,j]))
+            if eccentricity[i,j,1]<0.0:
+                arg_periapsis = -arg_periapsis
+
+            x1 = radial*np.cos(true_anomaly+arg_periapsis) # x coordinate
+            y1 = radial*np.sin(true_anomaly+arg_periapsis) # y coordinate
+            r_periapsis[i,j] = np.min(np.sqrt(x1*x1 + y1*y1))
+            # plt.plot(x1,y1)
+            # print(times,times_from_start)
+            callisto_state = callisto(times)
+            callisto_position = callisto_state[:,0:2]
+            # print(len(callisto_state),len(callisto_position))
+            # print(len(x1),len(callisto_position))
+
+
+            d = np.sqrt((x1-callisto_position[:,0])**2+(y1-callisto_position[:,1])**2)
+            distances = np.sqrt((x1-callisto_position[:,0])**2+(y1-callisto_position[:,1])**2)
+            D[i,j] = np.min(distances)
+            r_soi = constants.A_CALLISTO*np.power(constants.MU_CALLISTO/constants.MU_JUPITER, 2.0/5.0)
+            # plt.semilogy(times, d/r_soi)
+            plt.pcolormesh(degrees_r, degrees_v, D.T/r_soi, norm=matplotlib.colors.LogNorm(vmin=0.1, vmax=100.0))
+
+
+hyperbolicOrbit(degrees_r,degrees_v, t_periapsis,mean_motion,M_start, eccentricity_scalar, semimajor_axis, eccentricity,t_start)
+
 
 
 # To get the Callisto positions.  We need to create a callisto object outside the loop.
@@ -201,15 +229,23 @@ for i in range(len(degrees_r)):
 # distance between them and store it.
 
 
-plt.gca().add_artist(matplotlib.patches.Circle((0,0), 25*constants.R_JUPITER, facecolor="none", edgecolor="r"))
-plt.gca().add_artist(matplotlib.patches.Circle((0,0), r0, facecolor="none", edgecolor="k"))
-plt.gca().set_aspect("equal")
-plt.show()
+# plt.gca().add_artist(matplotlib.patches.Circle((0,0), 25*constants.R_JUPITER, facecolor="none", edgecolor="r"))
+# plt.gca().add_artist(matplotlib.patches.Circle((0,0), r0, facecolor="none", edgecolor="k"))
+# plt.gca().set_aspect("equal")
+
+
+# plt.ylabel(r"Distance to Callisto $d/r_{SOI}$")
+# plt.xlabel("Time")
+# plt.legend()
+# plt.show()
 
 # plt.pcolormesh(degrees_r, degrees_v, (r_periapsis.T)/constants.R_JUPITER)
-# h=plt.colorbar()
 # h.set_label("Periapsis [Rjupiter]")
-# plt.xlabel("Position angle [degrees]")
-# plt.ylabel("Velocity angle [degrees]")
-# plt.show()
+
+h=plt.colorbar()
+h.set_label(r"$\log_{10}(D/r_{SOI})$")
+plt.xlabel("Position angle [degrees]")
+plt.ylabel("Velocity angle [degrees]")
+plt.show()
+
 
