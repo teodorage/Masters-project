@@ -116,8 +116,9 @@ t_start = 58849.0*86400.0 #[seconds]
 
 # By trial and error I found that if the velocity vector was pointed within tan^-1(16/1000) degrees
 # of Jupiter then it would collide with Jupiter, hence 180- this angle as the upper limit.
-degrees_r = np.arange(0,360,30)
-degrees_v = np.arange(175,180-np.degrees(np.arctan2(16*constants.R_JUPITER,r0)),0.75)
+degrees_r = np.arange(0,360,15)
+degrees_v = np.arange(175,176.5-np.degrees(np.arctan2(16*constants.R_JUPITER,r0)),0.1)
+# degrees_v = np.arange(176.5,178.5-np.degrees(np.arctan2(16*constants.R_JUPITER,r0)),0.5)
 
 position, velocity, angular, eccentricity, semimajor_axis, mean_motion =r_v_vectors(r0,v0,degrees_r,degrees_v)
 
@@ -201,20 +202,25 @@ def hyperbolicOrbit(degrees_r,degrees_v, t_periapsis,mean_motion,M_start, eccent
             x1 = radial*np.cos(true_anomaly+arg_periapsis) # x coordinate
             y1 = radial*np.sin(true_anomaly+arg_periapsis) # y coordinate
             r_periapsis[i,j] = np.min(np.sqrt(x1*x1 + y1*y1))
-            # plt.plot(x1,y1)
+
             # print(times,times_from_start)
-            callisto_state = callisto(times)
-            callisto_position = callisto_state[:,0:2]
+
+            callisto_state = callisto(times) #calculate callisto's state for all the times
+            callisto_position = callisto_state[:,0:2] #take only the x and y coordinates for callisto
+            
+            plt.plot(x1,y1) #plot the trajectory of spacecraft
+            plt.plot(callisto_state[:,0], callisto_state[:,1], '-', c="tab:purple") #plot callisto
+            plt.plot([callisto_state[-1,0]], [callisto_state[-1,1]], 'o', c="tab:purple", markerfacecolor="tab:purple")
+
             # print(len(callisto_state),len(callisto_position))
             # print(len(x1),len(callisto_position))
 
+            distances = np.sqrt((x1-callisto_position[:,0])**2+(y1-callisto_position[:,1])**2) #determine distance between callisto and spacecraft
+            D[i,j] = np.min(distances) 
+            r_soi = constants.A_CALLISTO*np.power(constants.MU_CALLISTO/constants.MU_JUPITER, 2.0/5.0) #sphere of infl
 
-            d = np.sqrt((x1-callisto_position[:,0])**2+(y1-callisto_position[:,1])**2)
-            distances = np.sqrt((x1-callisto_position[:,0])**2+(y1-callisto_position[:,1])**2)
-            D[i,j] = np.min(distances)
-            r_soi = constants.A_CALLISTO*np.power(constants.MU_CALLISTO/constants.MU_JUPITER, 2.0/5.0)
-            # plt.semilogy(times, d/r_soi)
-            plt.pcolormesh(degrees_r, degrees_v, D.T/r_soi, norm=matplotlib.colors.LogNorm(vmin=0.1, vmax=100.0))
+            # plt.semilogy(times, distances/r_soi)
+            # plt.pcolormesh(degrees_r, degrees_v, D.T/r_soi, norm=matplotlib.colors.LogNorm(vmin=0.1, vmax=100.0))
 
 
 hyperbolicOrbit(degrees_r,degrees_v, t_periapsis,mean_motion,M_start, eccentricity_scalar, semimajor_axis, eccentricity,t_start)
@@ -228,24 +234,30 @@ hyperbolicOrbit(degrees_r,degrees_v, t_periapsis,mean_motion,M_start, eccentrici
 # Now we have the spacecraft position and the Callisto position we just need to work out the
 # distance between them and store it.
 
+# for trajectory
 
-# plt.gca().add_artist(matplotlib.patches.Circle((0,0), 25*constants.R_JUPITER, facecolor="none", edgecolor="r"))
-# plt.gca().add_artist(matplotlib.patches.Circle((0,0), r0, facecolor="none", edgecolor="k"))
-# plt.gca().set_aspect("equal")
+plt.gca().add_artist(matplotlib.patches.Circle((0,0), 25*constants.R_JUPITER, facecolor="none", edgecolor="r"))
+plt.gca().add_artist(matplotlib.patches.Circle((0,0), r0, facecolor="none", edgecolor="k"))
+plt.gca().set_aspect("equal")
+plt.show()
 
+
+# for the curve line plot
 
 # plt.ylabel(r"Distance to Callisto $d/r_{SOI}$")
 # plt.xlabel("Time")
-# plt.legend()
 # plt.show()
+
 
 # plt.pcolormesh(degrees_r, degrees_v, (r_periapsis.T)/constants.R_JUPITER)
 # h.set_label("Periapsis [Rjupiter]")
 
-h=plt.colorbar()
-h.set_label(r"$\log_{10}(D/r_{SOI})$")
-plt.xlabel("Position angle [degrees]")
-plt.ylabel("Velocity angle [degrees]")
-plt.show()
+# for the colour plot
+
+# h=plt.colorbar()
+# h.set_label(r"$\log_{10}(D/r_{SOI})$")
+# plt.xlabel("Position angle [degrees]")
+# plt.ylabel("Velocity angle [degrees]")
+# plt.show()
 
 
