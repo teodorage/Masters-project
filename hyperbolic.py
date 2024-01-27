@@ -116,9 +116,10 @@ t_start = 58849.0*86400.0 #[seconds]
 
 # By trial and error I found that if the velocity vector was pointed within tan^-1(16/1000) degrees
 # of Jupiter then it would collide with Jupiter, hence 180- this angle as the upper limit.
-degrees_r = np.arange(0,360,15)
-degrees_v = np.arange(175,176.5-np.degrees(np.arctan2(16*constants.R_JUPITER,r0)),0.1)
-# degrees_v = np.arange(176.5,178.5-np.degrees(np.arctan2(16*constants.R_JUPITER,r0)),0.5)
+# degrees_r = np.arange(0,360,10)
+degrees_r = np.arange(200,255,30)
+# degrees_v = np.arange(175,180-np.degrees(np.arctan2(16*constants.R_JUPITER,r0)),0.25)
+degrees_v = np.arange(176.0,177.5,0.55)
 
 position, velocity, angular, eccentricity, semimajor_axis, mean_motion =r_v_vectors(r0,v0,degrees_r,degrees_v)
 
@@ -175,11 +176,12 @@ t_periapsis = -M_start/mean_motion
 eccentricity_scalar = np.linalg.norm(eccentricity, axis=2)
 r_periapsis = np.zeros_like(semimajor_axis)
 callisto = bodies.get_callisto()
-# distance = np.zeros()
-def hyperbolicOrbit(degrees_r,degrees_v, t_periapsis,mean_motion,M_start, eccentricity_scalar, semimajor_axis, eccentricity,t_start):
-    D = np.zeros((len(degrees_r),len(degrees_v)))
-    for i in range(len(degrees_r)):
-        for j in range(len(degrees_v)):
+
+
+# def hyperbolicOrbit(degrees_r,degrees_v, t_periapsis,mean_motion,M_start, eccentricity_scalar, semimajor_axis, eccentricity,t_start):
+D = np.zeros((len(degrees_r),len(degrees_v)))
+for i in range(len(degrees_r)):
+    for j in range(len(degrees_v)):
             print("Computing trajectory: deg_r {}/{}, deg_v {}/{}".format(i+1, len(degrees_r), j+1, len(degrees_v)))
 
         # t_start is a datetime.datetime object, but mean_anomaly just needs
@@ -201,17 +203,18 @@ def hyperbolicOrbit(degrees_r,degrees_v, t_periapsis,mean_motion,M_start, eccent
 
             x1 = radial*np.cos(true_anomaly+arg_periapsis) # x coordinate
             y1 = radial*np.sin(true_anomaly+arg_periapsis) # y coordinate
+            z1 = np.zeros(len(x1))
             r_periapsis[i,j] = np.min(np.sqrt(x1*x1 + y1*y1))
+            spacecraft_position = np.array(list(zip(x1,y1,z1)))
 
             # print(times,times_from_start)
 
             callisto_state = callisto(times) #calculate callisto's state for all the times
             callisto_position = callisto_state[:,0:2] #take only the x and y coordinates for callisto
             
-            plt.plot(x1,y1) #plot the trajectory of spacecraft
-            plt.plot(callisto_state[:,0], callisto_state[:,1], '-', c="tab:purple") #plot callisto
-            plt.plot([callisto_state[-1,0]], [callisto_state[-1,1]], 'o', c="tab:purple", markerfacecolor="tab:purple")
-
+            # plt.plot(x1-callisto_position[:,0],y1-callisto_position[:,1]) #plot the trajectory of spacecraft
+            # plt.plot(x1,y1)
+            # print(callisto_position[:,0], callisto_position[:,1])
             # print(len(callisto_state),len(callisto_position))
             # print(len(x1),len(callisto_position))
 
@@ -219,27 +222,98 @@ def hyperbolicOrbit(degrees_r,degrees_v, t_periapsis,mean_motion,M_start, eccent
             D[i,j] = np.min(distances) 
             r_soi = constants.A_CALLISTO*np.power(constants.MU_CALLISTO/constants.MU_JUPITER, 2.0/5.0) #sphere of infl
 
-            # plt.semilogy(times, distances/r_soi)
+            # # plt.semilogy(times, distances/r_soi)
             # plt.pcolormesh(degrees_r, degrees_v, D.T/r_soi, norm=matplotlib.colors.LogNorm(vmin=0.1, vmax=100.0))
 
 
-hyperbolicOrbit(degrees_r,degrees_v, t_periapsis,mean_motion,M_start, eccentricity_scalar, semimajor_axis, eccentricity,t_start)
+# rx = callisto_state[:,0]
+# ry = callisto_state[:,1]
+# vx = callisto_state[:,3]
+# vy = callisto_state[:,4]
+# print(np.linalg.norm(callisto_position ,  axis = 1), callisto_position)
+
+callisto_vel = callisto_state[:,3:6]
+callisto_pos = callisto_state[:,0:3]
+
+# def change_coord(position, velocity):
+
+#     b1 = np.zeros_like(position)
+#     b2 = np.zeros_like(position)
+#     b3 = np.zeros_like(position)
+    # w1 = np.zeros(len(position))
+    # w2 = np.zeros(len(position))
+
+#     for i in range(len(position)):
+#         norm_position = np.linalg.norm(position, axis = 1)
+#         b1[i] = - np.divide(position[i],norm_position[i])
+#         b3_unorm = np.cross(position[i],velocity[i])
+#         b3[i] = b3_unorm/np.linalg.norm(b3_unorm)
+#         b2[i] = np.cross(b3[i],b1[i])
+
+#         w1[i] = np.dot(b1[i],position[i].T)
+#         w2[i] = np.dot(b2[i],position[i].T)
+
+#     return(w1, w2)
+
+def change_to_moon_frame(position, velocity, spacecraft_position):
+    b1 = -np.divide(position, np.linalg.norm(position, axis = 1)[:,None])
+    b3_unorm = np.cross(position, velocity)
+    b3 = b3_unorm/np.linalg.norm(b3_unorm, axis=1)[:,None]
+    b2 = np.cross(b3, b1)
+    
+    # w1 = np.zeros(spacecraft_position.shape[0])
+    # w2 = np.zeros(spacecraft_position.shape[0])
+    # for i in range(spacecraft_position.shape[0]):
+    #     w1[i] = np.dot(b1[i], spacecraft_position.T[:,i])
+    #     w2[i] = np.dot(b2[i],spacecraft_position.T[:,i])
+    w1 = np.dot(b1, spacecraft_position.T)
+    w2 = np.dot(b2, spacecraft_position.T)
+    # y1 = np.dot(b1,position.T)
+    # y2 = np.dot(b2,position.T)
+    length = len(b1)
+    pos_in_moon_frame = np.zeros((length, 2))
+    for i in range(length):
+        pos_in_moon_frame[i] = [np.dot(b1[i], spacecraft_position.T[:,i]),np.dot(b2[i], spacecraft_position.T[:,i])]
+
+    return pos_in_moon_frame, b1,b2
+
+def change_to_jupiter_frame(b1,b2,pos_in_moon_frame):
+    
+    k1 = np.array([b1[:,0],b2[:,0]]).T
+    k2 = np.array([b1[:,1],b2[:,1]]).T
+    length = len(k1)
+    pos_in_jupiter_frame = np.zeros((length,2))
+    for i in range(length):
+        pos_in_jupiter_frame[i] = [np.dot(k1[i], pos_in_moon_frame.T[:,i]),np.dot(k2[i], pos_in_moon_frame.T[:,i])]
+    
+    return pos_in_jupiter_frame, k1, k2
+
+
+new_position,b1,b2 = change_to_moon_frame(callisto_pos, callisto_vel, spacecraft_position)
+# plt.plot(w1[:,0],w2[:,1])
+# plt.plot(spacecraft_position[:,0],spacecraft_position[:,1])
+# plt.plot(new_position[:,0],new_position[:,1])
+
+jupiter_frame_pos, k1, k2 =  change_to_jupiter_frame(b1,b2, new_position)
+# print(jupiter_frame_pos, spacecraft_position)
 
 
 
-# To get the Callisto positions.  We need to create a callisto object outside the loop.
-# Inside the loop we need to make a whole load of times to pass into the callisto object.
-# We can use times_from_start but need to add on t_start.  Then we can get the position
-# and velocity of Callisto for all the times that we have worked out the spacecraft position.
-# Now we have the spacecraft position and the Callisto position we just need to work out the
-# distance between them and store it.
+
+
+
+# hyperbolicOrbit(degrees_r,degrees_v, t_periapsis,mean_motion,M_start, eccentricity_scalar, semimajor_axis, eccentricity,t_start)
+# plt.scatter(callisto_position[:,0], callisto_position[:,1], marker = 'o', c="tab:red")
+# plt.plot([callisto_position[-1,0]], [callisto_position[-1,1]], 'o', c="tab:red", markerfacecolor="tab:red")
 
 # for trajectory
 
-plt.gca().add_artist(matplotlib.patches.Circle((0,0), 25*constants.R_JUPITER, facecolor="none", edgecolor="r"))
-plt.gca().add_artist(matplotlib.patches.Circle((0,0), r0, facecolor="none", edgecolor="k"))
-plt.gca().set_aspect("equal")
-plt.show()
+# plt.gca().add_artist(matplotlib.patches.Circle((0,0), 25*constants.R_JUPITER, facecolor="none", edgecolor="r"))
+# plt.gca().add_artist(matplotlib.patches.Circle((0,0), 2410.3, facecolor="none", edgecolor="r"))
+# # plt.gca().add_artist(matplotlib.patches.Circle((0,0), r0, facecolor="none", edgecolor="k"))
+# plt.gca().set_aspect("equal")
+# plt.gca().add_artist(matplotlib.patches.Circle((0,0), r_soi, facecolor="none", edgecolor="r"))
+# plt.show()
 
 
 # for the curve line plot
