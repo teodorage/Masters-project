@@ -6,6 +6,8 @@ import matplotlib.patches
 import kepler
 import bodies
 import datetime
+import gravity_assist
+
 
 def r_v_vectors(r0,v0, degrees_r,degrees_v):
     """Calculate a grid of starting position and velocity vectors and orbital parameters
@@ -21,7 +23,8 @@ def r_v_vectors(r0,v0, degrees_r,degrees_v):
     degrees_v : np.ndarray
         Array of velocity angles [degrees]
     """
-
+    # all of these represent values that the spacecraft has at the beginning and they only depend on where on a circle
+    # the spacecraft starts from and where the velocity vector points
     pos = np.zeros((len(degrees_r), len(degrees_v), 3))     #eccentricity, semimajor axis and mean motion of the spacecraft
     vel = np.zeros((len(degrees_r), len(degrees_v), 3))
     mom = np.zeros((len(degrees_r), len(degrees_v), 3))
@@ -117,11 +120,13 @@ t_start = 58849.0*86400.0 #[seconds]
 # By trial and error I found that if the velocity vector was pointed within tan^-1(16/1000) degrees
 # of Jupiter then it would collide with Jupiter, hence 180- this angle as the upper limit.
 # degrees_r = np.arange(0,360,10)
-degrees_r = np.arange(200,255,30)
+degrees_r = np.arange(209,211,1)
 # degrees_v = np.arange(175,180-np.degrees(np.arctan2(16*constants.R_JUPITER,r0)),0.25)
-degrees_v = np.arange(176.0,177.5,0.55)
+degrees_v = np.arange(177.5,178.0,0.25)
+
 
 position, velocity, angular, eccentricity, semimajor_axis, mean_motion =r_v_vectors(r0,v0,degrees_r,degrees_v)
+
 
 # plt.pcolormesh(degrees_r, degrees_v, np.linalg.norm(eccentricity, axis=2).T)
 # h=plt.colorbar()
@@ -179,8 +184,11 @@ callisto = bodies.get_callisto()
 
 
 # def hyperbolicOrbit(degrees_r,degrees_v, t_periapsis,mean_motion,M_start, eccentricity_scalar, semimajor_axis, eccentricity,t_start):
+range_degrees_inSOI = []
+degree_r_map = {}
+
 D = np.zeros((len(degrees_r),len(degrees_v)))
-for i in range(len(degrees_r)):
+for i in range(len(degrees_r)): # these for loops actually calculate the spacecraft's position and velocity based on the time 
     for j in range(len(degrees_v)):
             print("Computing trajectory: deg_r {}/{}, deg_v {}/{}".format(i+1, len(degrees_r), j+1, len(degrees_v)))
 
@@ -192,10 +200,13 @@ for i in range(len(degrees_r)):
             # times = [datetime.datetime.utcfromtimestamp(t_start) + datetime.timedelta(seconds=t) for t in times_from_start]
             times = np.array([t_start + t for t in times_from_start])
 
+            assert(len(times_from_start)==len(times))
+
             mean_anomaly = mean_motion[i,j]*(times_from_start) + M_start[i,j]
             hyper_anomaly = array_basicKeplerEquationSolver(mean_anomaly, eccentricity_scalar[i,j])     # Using the faster array version - we can just pass all the mean anomalies and it will return all the hyperbolic anomalies
             true_anomaly = 2.0*np.arctan(np.sqrt((eccentricity_scalar[i,j] +1)/(eccentricity_scalar[i,j] - 1))*np.tan(hyper_anomaly*0.5)) # true anomaly
             radial = semimajor_axis[i,j]*(1-eccentricity_scalar[i,j] *np.cosh(hyper_anomaly)) # determines the radius which is then used for the x-y coordinates
+            gamma  = np.arctan(eccentricity_scalar[i,j]*np.sin(true_anomaly)/(1+eccentricity_scalar[i,j]*np.cos(true_anomaly))) #flight path angle
 
             arg_periapsis = np.arccos(eccentricity[i,j,0]/(eccentricity_scalar[i,j]))
             if eccentricity[i,j,1]<0.0:
@@ -204,102 +215,73 @@ for i in range(len(degrees_r)):
             x1 = radial*np.cos(true_anomaly+arg_periapsis) # x coordinate
             y1 = radial*np.sin(true_anomaly+arg_periapsis) # y coordinate
             z1 = np.zeros(len(x1))
+             
+            vx = v0*(-np.sin(true_anomaly+arg_periapsis-gamma))
+            vy = v0*(np.cos(true_anomaly+arg_periapsis-gamma))
+            vz = np.zeros(len(vx))
+
             r_periapsis[i,j] = np.min(np.sqrt(x1*x1 + y1*y1))
+
             spacecraft_position = np.array(list(zip(x1,y1,z1)))
+            spacecraft_velocity = np.array(list(zip(vx,vy,vz)))
 
-            # print(times,times_from_start)
-
+            key = str(degrees_r[i]) + "-" + str(degrees_v[j])
+        
             callisto_state = callisto(times) #calculate callisto's state for all the times
-            callisto_position = callisto_state[:,0:2] #take only the x and y coordinates for callisto
+            callisto_position = callisto_state[:,0:3] #position vector for callisto
+            callisto_velocity = callisto_state[:,3:6] #velocity vecotr of callisto
+
+            degree_r_map[key] = {"spacecraft_position":spacecraft_position, "spacecraft_velocity":spacecraft_velocity,
+                                  "callisto_position":callisto_position, "callisto_velocity":callisto_velocity}
+
             
             # plt.plot(x1-callisto_position[:,0],y1-callisto_position[:,1]) #plot the trajectory of spacecraft
             # plt.plot(x1,y1)
             # print(callisto_position[:,0], callisto_position[:,1])
-            # print(len(callisto_state),len(callisto_position))
-            # print(len(x1),len(callisto_position))
 
             distances = np.sqrt((x1-callisto_position[:,0])**2+(y1-callisto_position[:,1])**2) #determine distance between callisto and spacecraft
             D[i,j] = np.min(distances) 
             r_soi = constants.A_CALLISTO*np.power(constants.MU_CALLISTO/constants.MU_JUPITER, 2.0/5.0) #sphere of infl
-
+  
             # # plt.semilogy(times, distances/r_soi)
             # plt.pcolormesh(degrees_r, degrees_v, D.T/r_soi, norm=matplotlib.colors.LogNorm(vmin=0.1, vmax=100.0))
+   
+            for k in range(len(distances)):
+                if distances[k] <= r_soi: # checks whether the  spacecraft is inside the sphere of influence and saves those angles combinations
+                # print("Spacecraft is inside Callisto's SOI at deg_r {}, deg_v {}.".format(degrees_r[i], degrees_v[j]))
+                    range_degrees_inSOI.append((degrees_r[i], degrees_v[j]))
+                    # print(spacecraft_velocity[i,:])
+                    
 
 
-# rx = callisto_state[:,0]
-# ry = callisto_state[:,1]
-# vx = callisto_state[:,3]
-# vy = callisto_state[:,4]
-# print(np.linalg.norm(callisto_position ,  axis = 1), callisto_position)
+for key,value in degree_r_map.items():
+    b1,b2,rx,ry, vx, vy, pos_in_moon_frame = gravity_assist.change_to_moon_frame(value["callisto_position"], value["callisto_velocity"], value["spacecraft_position"], value["spacecraft_velocity"])
+    delta,b = gravity_assist.gravity_assist(value["spacecraft_velocity"], rx[0],ry[0], value["spacecraft_velocity"][:,0],value["spacecraft_velocity"][:,1])
 
-callisto_vel = callisto_state[:,3:6]
-callisto_pos = callisto_state[:,0:3]
-
-# def change_coord(position, velocity):
-
-#     b1 = np.zeros_like(position)
-#     b2 = np.zeros_like(position)
-#     b3 = np.zeros_like(position)
-    # w1 = np.zeros(len(position))
-    # w2 = np.zeros(len(position))
-
-#     for i in range(len(position)):
-#         norm_position = np.linalg.norm(position, axis = 1)
-#         b1[i] = - np.divide(position[i],norm_position[i])
-#         b3_unorm = np.cross(position[i],velocity[i])
-#         b3[i] = b3_unorm/np.linalg.norm(b3_unorm)
-#         b2[i] = np.cross(b3[i],b1[i])
-
-#         w1[i] = np.dot(b1[i],position[i].T)
-#         w2[i] = np.dot(b2[i],position[i].T)
-
-#     return(w1, w2)
-
-def change_to_moon_frame(position, velocity, spacecraft_position):
-    b1 = -np.divide(position, np.linalg.norm(position, axis = 1)[:,None])
-    b3_unorm = np.cross(position, velocity)
-    b3 = b3_unorm/np.linalg.norm(b3_unorm, axis=1)[:,None]
-    b2 = np.cross(b3, b1)
-    
-    # w1 = np.zeros(spacecraft_position.shape[0])
-    # w2 = np.zeros(spacecraft_position.shape[0])
-    # for i in range(spacecraft_position.shape[0]):
-    #     w1[i] = np.dot(b1[i], spacecraft_position.T[:,i])
-    #     w2[i] = np.dot(b2[i],spacecraft_position.T[:,i])
-    w1 = np.dot(b1, spacecraft_position.T)
-    w2 = np.dot(b2, spacecraft_position.T)
-    # y1 = np.dot(b1,position.T)
-    # y2 = np.dot(b2,position.T)
-    length = len(b1)
-    pos_in_moon_frame = np.zeros((length, 2))
-    for i in range(length):
-        pos_in_moon_frame[i] = [np.dot(b1[i], spacecraft_position.T[:,i]),np.dot(b2[i], spacecraft_position.T[:,i])]
-
-    return pos_in_moon_frame, b1,b2
-
-def change_to_jupiter_frame(b1,b2,pos_in_moon_frame):
-    
-    k1 = np.array([b1[:,0],b2[:,0]]).T
-    k2 = np.array([b1[:,1],b2[:,1]]).T
-    length = len(k1)
-    pos_in_jupiter_frame = np.zeros((length,2))
-    for i in range(length):
-        pos_in_jupiter_frame[i] = [np.dot(k1[i], pos_in_moon_frame.T[:,i]),np.dot(k2[i], pos_in_moon_frame.T[:,i])]
-    
-    return pos_in_jupiter_frame, k1, k2
+    k1,k2, x_j, y_j, z_j= gravity_assist.change_to_jupiter_frame(b1,b2, pos_in_moon_frame)
+ 
+    # for i in range(len(b)):
+    #     if b[i]<100 and b[i]>0:
+    #         print(b[i])
+    # plt.plot(rx,ry)
+# plt.show()
 
 
-new_position,b1,b2 = change_to_moon_frame(callisto_pos, callisto_vel, spacecraft_position)
-# plt.plot(w1[:,0],w2[:,1])
-# plt.plot(spacecraft_position[:,0],spacecraft_position[:,1])
 # plt.plot(new_position[:,0],new_position[:,1])
+# plt.plot(callistopos[:,0],callistopos[:,1])
+# print(new_position)
 
-jupiter_frame_pos, k1, k2 =  change_to_jupiter_frame(b1,b2, new_position)
+# plt.plot(rx[:,0],ry[:,0])
+# plt.plot(rx,ry) #plots all column values on the first row
+# for i in range(len(rx[0])):
+#     plt.plot(rx[i,:], ry[i,:])
+
+# plt.plot(x[0,:],y[0,:])
+
+
+# jupiter_frame_pos, k1, k2 =  change_to_jupiter_frame(b1,b2, new_position)
 # print(jupiter_frame_pos, spacecraft_position)
-
-
-
-
+# print(callistopos)
 
 
 # hyperbolicOrbit(degrees_r,degrees_v, t_periapsis,mean_motion,M_start, eccentricity_scalar, semimajor_axis, eccentricity,t_start)
