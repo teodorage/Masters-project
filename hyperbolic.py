@@ -120,7 +120,7 @@ t_start = 58849.0*86400.0 #[seconds]
 # By trial and error I found that if the velocity vector was pointed within tan^-1(16/1000) degrees
 # of Jupiter then it would collide with Jupiter, hence 180- this angle as the upper limit.
 # degrees_r = np.arange(0,360,10)
-degrees_r = np.arange(209,211,1)
+degrees_r = np.arange(209,211,0.2)
 # degrees_v = np.arange(175,180-np.degrees(np.arctan2(16*constants.R_JUPITER,r0)),0.25)
 degrees_v = np.arange(177.5,178.0,0.25)
 
@@ -192,12 +192,7 @@ for i in range(len(degrees_r)): # these for loops actually calculate the spacecr
     for j in range(len(degrees_v)):
             print("Computing trajectory: deg_r {}/{}, deg_v {}/{}".format(i+1, len(degrees_r), j+1, len(degrees_v)))
 
-        # t_start is a datetime.datetime object, but mean_anomaly just needs
-        # times from t_start, so we can just make an array of times
-        # from t_start
-
-            times_from_start = np.arange(0, 1.5*t_periapsis[i,j], 3600.0)
-            # times = [datetime.datetime.utcfromtimestamp(t_start) + datetime.timedelta(seconds=t) for t in times_from_start]
+            times_from_start = np.arange(0, 1.5*t_periapsis[i,j], 60.0)
             times = np.array([t_start + t for t in times_from_start])
 
             assert(len(times_from_start)==len(times))
@@ -250,22 +245,25 @@ for i in range(len(degrees_r)): # these for loops actually calculate the spacecr
                 if distances[k] <= r_soi: # checks whether the  spacecraft is inside the sphere of influence and saves those angles combinations
                 # print("Spacecraft is inside Callisto's SOI at deg_r {}, deg_v {}.".format(degrees_r[i], degrees_v[j]))
                     range_degrees_inSOI.append((degrees_r[i], degrees_v[j]))
-                    # print(spacecraft_velocity[i,:])
+                    b1,b2,rx,ry, vx, vy, pos_in_moon_frame, vel_in_moon_frame = gravity_assist.change_to_moon_frame(callisto_position, callisto_velocity, spacecraft_position, spacecraft_velocity)
+                    delta,b, v_inf_out = gravity_assist.gravity_assist(vel_in_moon_frame[k], rx[k],ry[k], vx[k],vy[k])
+
+                    k1,k2, pos_in_jupiter_frame, vel_in_jupiter_frame = gravity_assist.change_to_jupiter_frame(b1,b2, pos_in_moon_frame,vel_in_moon_frame, callisto_position,callisto_velocity)
+                    # print(vel_in_moon_frame)
+                    # print(pos_in_jupiter_frame,vel_in_jupiter_frame, spacecraft_position)
+                    # delta2 = np.arccos(np.dot(vel_in_moon_frame[k], v_inf_out)/np.linalg.norm(vel_in_moon_frame[k]))
+                    print(spacecraft_position, pos_in_jupiter_frame)
                     
+                    break
 
 
-for key,value in degree_r_map.items():
-    b1,b2,rx,ry, vx, vy, pos_in_moon_frame = gravity_assist.change_to_moon_frame(value["callisto_position"], value["callisto_velocity"], value["spacecraft_position"], value["spacecraft_velocity"])
-    delta,b = gravity_assist.gravity_assist(value["spacecraft_velocity"], rx[0],ry[0], value["spacecraft_velocity"][:,0],value["spacecraft_velocity"][:,1])
 
-    k1,k2, x_j, y_j, z_j= gravity_assist.change_to_jupiter_frame(b1,b2, pos_in_moon_frame)
- 
-    # for i in range(len(b)):
-    #     if b[i]<100 and b[i]>0:
-    #         print(b[i])
-    # plt.plot(rx,ry)
-# plt.show()
 
+# for key,value in degree_r_map.items():
+#     b1,b2,rx,ry, vx, vy, pos_moon_frame, vel_moon = gravity_assist.change_to_moon_frame(value["callisto_position"], value["callisto_velocity"], value["spacecraft_position"], value["spacecraft_velocity"])
+
+#     k1,k2, new_pos,newvel= gravity_assist.change_to_jupiter_frame(b1,b2, pos_in_moon_frame,vel_moon,value["callisto_position"], value["callisto_velocity"])
+#     print(new_pos, value["spacecraft_position"])
 
 # plt.plot(new_position[:,0],new_position[:,1])
 # plt.plot(callistopos[:,0],callistopos[:,1])
@@ -315,5 +313,4 @@ for key,value in degree_r_map.items():
 # plt.xlabel("Position angle [degrees]")
 # plt.ylabel("Velocity angle [degrees]")
 # plt.show()
-
 
