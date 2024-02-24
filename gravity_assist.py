@@ -47,7 +47,7 @@ def change_to_jupiter_frame(b1,b2,pos_in_moon_frame,vel_in_moon_frame, position,
     vx_j = dot(k1,vel_in_moon_frame)
     vy_j   = dot(k2, vel_in_moon_frame)
     vz_j = np.zeros(len(vx_j))
-    vel_in_jupiter_frame = np.array(list(zip(vx_j,vy_j,vz_j)))
+    vel_in_jupiter_frame = np.array(list(zip(vx_j,vy_j,vz_j)))+velocity[:,0:3]
    
     
     return k1, k2, pos_in_jupiter_frame,vel_in_jupiter_frame
@@ -71,3 +71,27 @@ def gravity_assist(v_inf,r0x,r0y,vx,vy):
     return delta ,b, v_inf_out
 
 
+def keplersolver(mean_anomaly: float, eccentricity: float):
+    relative_change_epsilon: float=1e-6
+    max_iter = 100
+    # Iterate using Newton-Raphson.
+    iter = 0
+    relative_change = 1e6
+        # Initial starting guess for the eccentric anomaly.
+    ecc_anomaly = 0.0
+    if eccentricity>=0.8:
+        ecc_anomaly = np.pi
+
+        # Iterate using Newton-Raphson.
+    iter = 0
+    relative_change = 1e6
+        
+    while np.any(relative_change>relative_change_epsilon) and (iter< max_iter):
+            # Compute the delta to add onto the eccentric anomaly for this step, 
+            # work out the new eccentric anomaly estimate, work out the relative
+            # change and increment the iteration variable.
+        delta_ecc_anomaly = (mean_anomaly + eccentricity*np.sin(ecc_anomaly) - ecc_anomaly)/(1-eccentricity*np.cos(ecc_anomaly))
+        ecc_anomaly += delta_ecc_anomaly
+        relative_change = np.abs(delta_ecc_anomaly/(ecc_anomaly+1e-300))
+        iter += 1
+        return ecc_anomaly

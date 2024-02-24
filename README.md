@@ -7,3 +7,5 @@ Here is some example code to start off and that we can improve.
 * `bodies.py` contains four functions which make it easy to make KeplerianEllipticalOrbit objects for the four Galilean satellites -I basically got bored writing the actual code out all the time.
 * `propagation.py` contains some in-progress code for propagating orbits.
 * `util_testing.py` testing a few of the routines.
+* `hyperbolic.py` determines the spacecraft positions and velocites and performs the gravity assist
+* `gravity_assist.py` contains functions used to perform the gravity assist.
