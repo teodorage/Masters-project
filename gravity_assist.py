@@ -11,7 +11,51 @@ def dot_product(a,b): #function to calculate the dot product of two vectors
     return result
 
 
+def change_moon_frame(position, velocity, spacecraft_position, spacecraft_velocity): 
+    """This function is for one position and velocity vector"""
+
+    b1 = -np.divide(position, np.linalg.norm(position))  #set of coordinates in Moon frame
+    b3_unorm = np.cross(position, velocity)
+    b3 = b3_unorm/np.linalg.norm(b3_unorm)
+    b2 = np.cross(b3, b1)
+
+    rx = np.dot(b1, spacecraft_position-position) # spacecraft x coord in Moon frame
+    ry = np.dot(b2, spacecraft_position-position) # spacecraft y coord in Moon frame
+
+    vx = np.dot(b1, spacecraft_velocity-velocity) # spacecraft velocity x coord in moon frame
+    vy = np.dot(b2, spacecraft_velocity-velocity) # spacecraft velocity y coord in moon frame
+
+    new_position = np.array([rx,ry])
+    new_velocity = np.array([vx,vy])
+
+    return b1,b2,rx,ry, vx,vy, new_position, new_velocity
+
+def change_jupiter_frame(b1,b2,pos_in_moon_frame,vel_in_moon_frame, position, velocity ):
+    """This funciton is for only one position and velocity vector"""
+    k1 = np.array([b1[0],b2[0]]).T
+    k2 = np.array([b1[1],b2[1]]).T
+
+    x_j = np.dot(k1,pos_in_moon_frame[0:2])
+    y_j = np.dot(k2, pos_in_moon_frame[0:2])
+    z_j = 0
+    pos_in_jupiter_frame = np.array([x_j,y_j,z_j]) + position[0:3]
+
+    vx_j = np.dot(k1,vel_in_moon_frame)
+    vy_j = np.dot(k2, vel_in_moon_frame)
+    vz_j = 0
+    vel_in_jupiter_frame = np.array([vx_j,vy_j,vz_j])+velocity[0:3]
+   
+    
+    return k1, k2, pos_in_jupiter_frame,vel_in_jupiter_frame
+
+
+
+
+
+
+
 def change_to_moon_frame(position, velocity, spacecraft_position, spacecraft_velocity):
+    """This function is for an array of position and velocity vectors"""
 
     b1 = -np.divide(position, np.linalg.norm(position, axis = 1)[:,None])  #set of coordinates in Moon frame
     b3_unorm = np.cross(position, velocity)
@@ -35,6 +79,7 @@ def dot(a,b):
      return result
  
 def change_to_jupiter_frame(b1,b2,pos_in_moon_frame,vel_in_moon_frame, position, velocity ):
+    """This function is for an array of position and velocity vectors"""
     
     k1 = np.array([b1[:,0],b2[:,0]]).T
     k2 = np.array([b1[:,1],b2[:,1]]).T
@@ -72,6 +117,9 @@ def gravity_assist(v_inf,r0x,r0y,vx,vy):
 
 
 def keplersolver(mean_anomaly: float, eccentricity: float):
+    
+    """Solving Keplers equation for an elliptical orbit"""
+
     relative_change_epsilon: float=1e-6
     max_iter = 100
     # Iterate using Newton-Raphson.
