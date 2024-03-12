@@ -107,35 +107,38 @@ def check_forGA(position,moon_position,mu_moon,semimajor_moon):
     for i in range(len(position)):
         distance = np.sqrt((position[i,0]-moon_position[i,0])**2+(position[i,1]-moon_position[i,1])**2) 
         r_soi = semimajor_moon*np.power(mu_moon/constants.MU_JUPITER, 2.0/5.0) 
-        # if distance < r_soi:
-        if distance < 2000 and distance>50:
+        if distance < r_soi:
+        # if distance < 2000 and distance>50:
             return 1, i
     
-    return [0]
+    return 0,1e10
 
 
 def GravityAssist(position,velocity,moon_position,moon_velocity,moon_radius):
                 
             b1,b2,rx,ry,vx,vy, pos_moon_frame, vel_moon_frame = gravity_assist.change_moon_frame(moon_position,moon_velocity,position,velocity)
             delta,b, v_inf_out = gravity_assist.gravity_assist(vel_moon_frame, pos_moon_frame[0],pos_moon_frame[1], vel_moon_frame[0],vel_moon_frame[1])
-            print(delta,b)
-            print("Flyby altitude {} km".format(np.min(np.linalg.norm(pos_moon_frame))-moon_radius))
+
+            # print("Flyby altitude {} km".format(np.min(np.linalg.norm(pos_moon_frame))-moon_radius))
             k1,k2, pos_jupiter_frame, vel_jupiter_frame = gravity_assist.change_jupiter_frame(b1,b2, pos_moon_frame,vel_moon_frame, moon_position,moon_velocity)
             t_rsoi = 2*np.linalg.norm(pos_moon_frame)/(np.linalg.norm(vel_moon_frame)) #time it takes the spacecraft to go from one end of SOI to the other 
             v_inf_out_jupiter = np.array([np.dot(k1,v_inf_out),np.dot(k2,v_inf_out),0])+moon_velocity #change v_inf_out back into Jupiter frame
-            return v_inf_out_jupiter, pos_jupiter_frame   
+            return v_inf_out_jupiter, pos_jupiter_frame, delta
 
 
-def determine_orbit(r0,v0,time_start,arc_max,arc_num):
+results = {}
 
+def determine_orbit(r0,v0,time_start,arc_max,arc_num,results):
+    key = arc_num
+    results[key] = {"starting position":r0, "starting velocity":v0, "starting time":time_start, "bending angle":0}
     if arc_num<arc_max:
 
         angular_momentum = np.cross(r0, v0)
         eccentricity = np.subtract((np.cross(v0, angular_momentum)/constants.MU_JUPITER),(np.divide(r0,np.linalg.norm(r0))))
         arg_periapsis = np.arccos(eccentricity[0]/np.linalg.norm(eccentricity))
         semimajor_axis = 1.0/(2.0/np.linalg.norm(r0) - np.linalg.norm(v0)**2/constants.MU_JUPITER)
-        apoapsis = semimajor_axis*(1+np.linalg.norm(eccentricity))
-        print('Apoapsis distance {}'.format(apoapsis))
+        apoapsis = util.r_apoapsis(semimajor_axis,np.linalg.norm(eccentricity))
+        # print('Apoapsis distance {}'.format(apoapsis))
 
         if semimajor_axis < 0.0: #hyporbolic trajecotry
             position,velocity,times = hyperbolic_trajectory_calculator(r0,eccentricity,semimajor_axis,arg_periapsis)
@@ -149,26 +152,35 @@ def determine_orbit(r0,v0,time_start,arc_max,arc_num):
         callisto_state = callisto(time)
         ganymede_state = ganymede(time)
 
-        values = check_forGA(position,callisto_state[:,0:3], constants.MU_CALLISTO,constants.A_CALLISTO)
-        value = check_forGA(position,ganymede_state[:,0:3],constants.MU_GANYMEDE,constants.A_GANYMEDE)
+        ca_flyby, ca_index = check_forGA(position,callisto_state[:,0:3], constants.MU_CALLISTO,constants.A_CALLISTO)
+        ga_flyby, ga_index = check_forGA(position,ganymede_state[:,0:3],constants.MU_GANYMEDE,constants.A_GANYMEDE)
 
-        fly = value[0]
-        flyby = values[0]
 
-        if flyby == 1:
-            index = values[1]
-            v_inf, new_position = GravityAssist(position[index],velocity[index],callisto_state[index,0:3], callisto_state[index,3:6],constants.R_CALLISTO)
+        if ca_flyby == 1:
+            if ga_flyby == 1:
+                if ga_index < ca_index:
+                    index = ga_index
+                    v_inf, new_position, delta = GravityAssist(position[ga_index], velocity[ga_index],ganymede_state[ga_index,0:3],ganymede_state[ga_index,3:6],constants.R_GANYMEDE)
+                else:
+                    index = ca_index
+                    v_inf, new_position, delta = GravityAssist(position[ca_index],velocity[ca_index],callisto_state[ca_index,0:3], callisto_state[ca_index,3:6],constants.R_CALLISTO)
+            else:
+                    index = ca_index
+                    v_inf, new_position, delta = GravityAssist(position[ca_index],velocity[ca_index],callisto_state[ca_index,0:3], callisto_state[ca_index,3:6],constants.R_CALLISTO)
+
             print(v_inf,new_position)
             arc_num += 1
-            determine_orbit(new_position,v_inf,time[index],arc_max,arc_num)
+            determine_orbit(new_position,v_inf,time[index],arc_max,arc_num,results)
+            results[key] = {"starting position":new_position, "starting velocity":v_inf, "starting time":time[index], "bending angle": delta}
 
 
         else:
-            print('No gravity assist found for arc number {}'.format(arc_num))
+            print('No gravity assist found for arc number {}'.format(arc_num+1))
             return
             
 
-
+    results[key] = {"starting position":r0, "starting velocity":v0, "starting time":time_start, "bending angle": delta}
+    return results
 
 
 
@@ -183,7 +195,8 @@ r2 = np.array([46145061.01076064 ,54605305.67914784    ,    0.        ])
 v = np.array([-2.42088856 ,-2.38732038 , 0.        ])
 v2 = np.array([-2.4125405 , -2.39575631,  0.        ])
 
-determine_orbit(r2,v2,t_start,3,0)
+result = determine_orbit(r,v,t_start,3,0,results)
+print(result)
 
 # rcal= np.array([-1749122.32275296  , 720344.74662463  ,      0.        ])
 # spacecraft_position,spacecraft_velocity, times = elliptical_trajectory_calculator(rcal,7.337063799028E-03,1883136.6167305,-160.76003434076)
