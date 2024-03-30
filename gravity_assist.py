@@ -99,10 +99,10 @@ def change_to_jupiter_frame(b1,b2,pos_in_moon_frame,vel_in_moon_frame, position,
 
 
 
-def gravity_assist(v_inf,r0x,r0y,vx,vy):
+def gravity_assist(v_inf,r0x,r0y,vx,vy,mu_moon):
 
     b = (r0y*vx-r0x*vy)/(np.sqrt(vx**2+vy**2)) #impact parameter
-    closest_distance = (constants.MU_CALLISTO/(np.linalg.norm(v_inf)**2))*(np.sqrt(1+(b*(np.linalg.norm(v_inf)**2)/constants.MU_CALLISTO)**2)-1)
+    closest_distance = (mu_moon/(np.linalg.norm(v_inf)**2))*(np.sqrt(1+(b*(np.linalg.norm(v_inf)**2)/mu_moon)**2)-1)
     frac = constants.MU_CALLISTO/(closest_distance)
 
     delta = 2.0 * np.arcsin(frac/((np.linalg.norm(v_inf)**2)+frac)) #bending angle
@@ -117,18 +117,16 @@ def gravity_assist(v_inf,r0x,r0y,vx,vy):
 
 
 def keplersolver(mean_anomaly: float, eccentricity: float):
-    
+
     """Solving Keplers equation for an elliptical orbit"""
 
     relative_change_epsilon: float=1e-6
-    max_iter = 100
+    max_iter = 1000
     # Iterate using Newton-Raphson.
-    iter = 0
-    relative_change = 1e6
-        # Initial starting guess for the eccentric anomaly.
-    ecc_anomaly = 0.0
-    if eccentricity>=0.8:
-        ecc_anomaly = np.pi
+    ecc_anomaly = np.zeros_like(mean_anomaly)
+
+    if np.linalg.norm(eccentricity)>=0.8:
+        ecc_anomaly += np.pi
 
         # Iterate using Newton-Raphson.
     iter = 0
@@ -142,4 +140,11 @@ def keplersolver(mean_anomaly: float, eccentricity: float):
         ecc_anomaly += delta_ecc_anomaly
         relative_change = np.abs(delta_ecc_anomaly/(ecc_anomaly+1e-300))
         iter += 1
-        return ecc_anomaly
+        # print(iter,np.max(relative_change))
+    return ecc_anomaly
+    
+# E_start = np.linspace(0, 2*np.pi, 10)
+# M_start = E_start - 0.95*np.sin(E_start)
+# ecc = keplersolver(M_start,0.95)
+# print(ecc,E_start)
+# plt.plot

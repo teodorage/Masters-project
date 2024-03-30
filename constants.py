@@ -1,5 +1,6 @@
 """These are all the orbital and physics constants for the GTOC6 problem
 """
+import numpy as np
 
 ##
 # Moon radii [km] and standard gravitational parameters [km^3/s^2]
@@ -65,3 +66,7 @@ M0_GANYMEDE = 220.59841030407
 M0_CALLISTO = 321.07650614246
 
 
+##
+# Radii of spheres of influence
+R_SOI_CALLISTO = A_CALLISTO*np.power(MU_CALLISTO/MU_JUPITER, 2.0/5.0)
+R_SOI_GANYMEDE = A_GANYMEDE*np.power(MU_GANYMEDE/MU_JUPITER, 2.0/5.0)

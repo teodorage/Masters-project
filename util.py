@@ -61,3 +61,6 @@ def constrain_angle_0_360(theta: float) -> float:
 def semimajor_axis(v, r, mu):
     
     return 1/(2/r-(v**2/mu))
+
+def distances(spacecraft_position,position):
+     return np.sqrt((spacecraft_position[:,0]-position[:,0])**2+(spacecraft_position[:,1]-position[:,1])**2) 
