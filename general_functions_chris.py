@@ -297,14 +297,22 @@ def cost_fun_only_eccentricity(start_deg_r, start_deg_v, t_start):
     arcs = determine_orbit(r,v,t_start,3,0,{})
 
     cost = arcs[max(arcs.keys())]["eccentricity"]
+    costs = []
+    closest_distances_to_jupiter = []
+    # print(cost)
     # cost = 0.0
+
     for key, value in arcs.items():
-        cost1 = cost + np.exp(-value["closest distance to Jupiter [R_J]"]/2.0)
+        # cost1 = cost + np.exp(-value["closest distance to Jupiter [R_J]"]/2.0)
         cost2 =cost + np.exp(-value["closest distance to callisto [km]"]/50.0)
-        cost3 = cost+np.exp(-2000/value["closest distance to callisto [km]"])
+        cost1 = cost2+np.exp(-2000/value["closest distance to callisto [km]"])
+    costs.append(cost1)
+    closest_distances_to_jupiter.append(value["closest distance to callisto [km]"])
+    # print(cost1,value["closest distance to callisto [km]"])
 
+    return closest_distances_to_jupiter, costs
 
-    return cost1,cost2,cost3, arcs
+    # return cost1,cost2,cost3, arcs
 
 
 # Plot each cost
@@ -314,3 +322,43 @@ def cost_fun_only_eccentricity(start_deg_r, start_deg_v, t_start):
 # for i in range(4):
 #     print(cost_fun_only_eccentricity(deg_r[i], deg_v[i], 58849.0*86400.0))
 
+
+    
+deg_r = np.arange(0,60,1.25)
+deg_v = np.arange(175.0,179.0,0.1)
+
+start_deg_r, start_deg_v = np.meshgrid(deg_r, deg_v)
+cost_values = np.zeros_like(start_deg_r,dtype=float)
+
+all_costs = []
+all_distances = []
+
+for i in range(len(deg_r)):
+    for j in range(len(deg_v)):
+
+        print("Computing trajectory: deg_r {}/{}, deg_v {}/{}".format(i+1, len(deg_r), j+1, len(deg_v)))
+        # cost_fun_only_eccentricity(deg_r[i], deg_v[j], 58849.0 * 86400.0)
+        distances, costs = cost_fun_only_eccentricity(deg_r[i], deg_v[j], 58849.0 * 86400.0)
+        all_distances.extend(distances)
+        all_costs.extend(costs)
+        cost_values[j,i] = costs[0]
+
+# plt.plot(all_distances, all_costs, 'o',color='blue')
+# plt.xlabel('Closest Distance to Callisto [km]')
+# plt.ylabel('Cost')
+
+
+# plt.show()
+
+
+# plt.plot(cost_values)
+
+# Plot the cost values using pcolormesh
+plt.pcolormesh(start_deg_r, start_deg_v, cost_values,norm=matplotlib.colors.Normalize(vmin=cost_values.min(), vmax=cost_values.max()))
+plt.colorbar().set_label("Cost Function")
+plt.xlabel("Position angle [degrees]")
+plt.ylabel("Velocity angle [degrees]")
+plt.show()
+
+# 49.0 175.25 no GA
+# 49.0 175.0 Callisto GA
